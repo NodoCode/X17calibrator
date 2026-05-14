@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>X17 — Scintillateur Calibration</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h2 class="sr-only">X17 scintillateur calibration dashboard — home</h2>
+
+<div class="nav">
+  <a class="nav-logo" href="main.html">X17 <span>— Scintillateur Calibration</span></a>
+  <div class="nav-spacer"></div>
+  <span class="nav-clock" id="clk">--:--:--</span>
+  <a class="nav-btn primary" href="main.html"><i class="ti ti-home" aria-hidden="true"></i> Home</a>
+</div>
+
+<!-- HOME VIEW -->
+<div class="home-wrap">
+  <p class="home-title">Welcome</p>
+  <p class="home-sub">Here are the latest calibrations. To calibrate, press "New calibration".</p>
+  <div class="calib-list">
+
+    <div class="calib-card">
+      <div class="calib-header" onclick="toggleCalib(this)">
+        <div class="calib-dot"></div>
+        <span class="calib-name">Example — 2h ago</span>
+        <span class="calib-eq">E(ADC) = (4.42±0.36)·ADC + (4±3)</span>
+        <span class="calib-meta">¹³⁷Cs · ²²⁸Th</span>
+        <i class="ti ti-chevron-down calib-chevron" aria-hidden="true"></i>
+      </div>
+      <div class="calib-body">
+        <div class="calib-body-inner">
+          <a class="see-btn" href="Example.html"><i class="ti ti-chart-histogram" aria-hidden="true"></i> See histograms</a>
+          <span class="calib-sources">PMT U/D · NaI · Detector 04</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="calib-card">
+      <div class="calib-header" onclick="toggleCalib(this)">
+        <div class="calib-dot" style="background:#888780"></div>
+        <span class="calib-name">Session 2025-05-11</span>
+        <span class="calib-eq">E(ADC) = (4.11±0.42)·ADC + (6±4)</span>
+        <span class="calib-meta">⁶⁰Co · ¹³⁷Cs</span>
+        <i class="ti ti-chevron-down calib-chevron" aria-hidden="true"></i>
+      </div>
+      <div class="calib-body">
+        <div class="calib-body-inner">
+          <a class="see-btn" href="2025-05-11.html"><i class="ti ti-chart-histogram" aria-hidden="true"></i> See histograms</a>
+          <span class="calib-sources">PMT U/D · NaI · Detector 04</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

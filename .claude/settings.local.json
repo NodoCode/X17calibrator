@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(head -n 260 /home/timote/stage/calibrator/main.html)",
+      "Read(//tmp/**)"
+    ]
+  }
+}
