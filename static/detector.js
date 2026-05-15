@@ -211,11 +211,11 @@ function srcAccordionHTML(iso, idx, open){
           <div class="field-row">
             <div class="field-label">Upload CSV</div>
             <div class="upload-det">NaI</div>
-            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
+            <div class="upload-zone" data-kind="nai"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
             <div class="upload-det" style="margin-top:8px">Up (U)</div>
-            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
+            <div class="upload-zone" data-kind="up"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
             <div class="upload-det" style="margin-top:6px">Down (D)</div>
-            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
+            <div class="upload-zone" data-kind="down"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
           </div>
           <button class="delete-src-btn" onclick="deleteSrc(this)">
             <i class="ti ti-trash" aria-hidden="true"></i>
@@ -254,6 +254,68 @@ function drawDetailCharts(d){
     });
     drawRegression('c-reg');
   },50);
+}
+
+// ─── Upload wiring ────────────────────────────────────────────
+// One hidden <input type="file"> shared by all upload zones. Click on a zone
+// stores its reference, then triggers the picker; on `change`, the file is
+// POSTed to the FastAPI backend and the zone is marked `.filled` on success.
+let pendingUploadZone=null;
+
+function ensureFilePicker(){
+  let picker=document.getElementById('csv-file-picker');
+  if(picker) return picker;
+  picker=document.createElement('input');
+  picker.type='file';
+  picker.id='csv-file-picker';
+  picker.accept='.csv,text/csv';
+  picker.style.display='none';
+  picker.addEventListener('change',handleFileSelected);
+  document.body.appendChild(picker);
+  return picker;
+}
+
+document.addEventListener('click',(e)=>{
+  const zone=e.target.closest('.upload-zone');
+  if(!zone) return;
+  pendingUploadZone=zone;
+  const picker=ensureFilePicker();
+  picker.value='';  // allow re-selecting the same file
+  picker.click();
+});
+
+async function handleFileSelected(e){
+  const file=e.target.files[0];
+  const zone=pendingUploadZone;
+  pendingUploadZone=null;
+  if(!file || !zone) return;
+
+  const kind=zone.dataset.kind;
+  const acc=zone.closest('.src-accordion');
+  const accs=[...document.querySelectorAll('.src-accordion')];
+  const srcIdx=accs.indexOf(acc);
+  if(currentDetectorId===null || srcIdx<0 || !kind){
+    alert('Could not determine upload target.');
+    return;
+  }
+
+  const url=`/api/detectors/${currentDetectorId}/sources/${srcIdx}/upload/${kind}`;
+  const fd=new FormData();
+  fd.append('file',file);
+
+  zone.innerHTML='<div>Uploading…</div>';
+  try{
+    const res=await fetch(url,{method:'POST',body:fd});
+    const payload=await res.json();
+    if(!res.ok) throw new Error(payload.detail || 'upload failed');
+    zone.classList.add('filled');
+    zone.innerHTML=`<div class="upload-name">${file.name}</div><div>${payload.rows} rows · ${payload.channel_min.toFixed(0)}–${payload.channel_max.toFixed(0)}</div>`;
+    refreshSourceStatus(acc);
+  }catch(err){
+    console.error(err);
+    zone.classList.remove('filled');
+    zone.innerHTML=`<div style="color:#c44">Failed: ${err.message}</div>`;
+  }
 }
 
 // ─── Persistence: keep detectors[] in sync with the DOM ───────

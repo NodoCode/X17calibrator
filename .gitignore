@@ -1,0 +1,15 @@
+# Local lab data — never commit calibration sessions
+data/calibrations.json
+data/uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

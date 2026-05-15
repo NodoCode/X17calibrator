@@ -1,7 +1,11 @@
 import json
 from pathlib import Path
 
-from flask import Flask, jsonify, send_from_directory
+from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from analysis import io as csv_io
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -29,29 +33,56 @@ DEFAULT_DETECTORS = [
     {"id": 15, "status": "old", "fit": {"a": 4.24, "sigA": 0.40, "b": 6, "sigB": 3, "r2": 0.9976, "rms": 2.2, "points": 4}, "sources": [{"isotope": "¹³⁷Cs"}, {"isotope": "⁶⁰Co"}, {"isotope": "²²⁸Th"}]},
 ]
 
-app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
+app = FastAPI(title="X17 Scintillateur Calibration")
 
 
-@app.route("/")
+@app.get("/")
 def index():
-    return send_from_directory(STATIC_DIR, "index.html")
+    return FileResponse(STATIC_DIR / "index.html")
 
 
-@app.route("/detector.html")
-def detector():
-    return send_from_directory(STATIC_DIR, "detector.html")
+VALID_KINDS = {"nai", "up", "down"}
 
 
-@app.route("/api/calibrations", methods=["GET"])
+@app.post("/api/detectors/{det_id}/sources/{src_idx}/upload/{kind}")
+async def upload_csv(det_id: int, src_idx: int, kind: str, file: UploadFile):
+    """Receive one CSV (NaI, U, or D) for a given source of a given detector.
+
+    The file is parsed and validated immediately so the user gets feedback in
+    the upload zone. Storage / fitting will plug in here later.
+    """
+    if kind not in VALID_KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(VALID_KINDS)}")
+    try:
+        df = csv_io.parse_csv(file.file)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {
+        "status": "ok",
+        "filename": file.filename,
+        "rows": len(df),
+        "channel_min": float(df["channel"].min()),
+        "channel_max": float(df["channel"].max()),
+    }
+
+
+@app.get("/api/calibrations")
 def get_calibrations():
     if CALIBRATIONS_FILE.exists():
         try:
             with CALIBRATIONS_FILE.open("r", encoding="utf-8") as f:
-                return jsonify(json.load(f))
+                return json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
-    return jsonify(DEFAULT_DETECTORS)
+    return DEFAULT_DETECTORS
+
+
+# Mounted last so it doesn't shadow the API routes above.
+# `html=True` lets `/detector.html` (and any other static asset) resolve directly.
+app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    import uvicorn
+
+    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)

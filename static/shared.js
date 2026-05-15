@@ -34,12 +34,19 @@ function tick(){
 }
 
 // ─── Init ─────────────────────────────────────────────────────
-// One handler for both pages. Calls whichever page-specific renderer
-// is loaded (renderHomeCards from home.js, renderDetail from detector.js).
-document.addEventListener('DOMContentLoaded',()=>{
-  tick(); setInterval(tick,1000);
+// One handler for both pages. Renders immediately from the localStorage
+// cache for snappy first paint, then refreshes from the FastAPI backend in
+// the background and re-renders if the server returned new data.
+function renderActivePage(){
   if(typeof renderHomeCards==='function') renderHomeCards();
   if(typeof renderDetail==='function') renderDetail();
+}
+
+document.addEventListener('DOMContentLoaded',async()=>{
+  tick(); setInterval(tick,1000);
+  renderActivePage();
+  const refreshed=await loadDetectorsFromBackend();
+  if(refreshed) renderActivePage();
 });
 
 // When navigating back from the detail page (browser back / logo click),

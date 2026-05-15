@@ -68,3 +68,22 @@ function resetDetectors(){
   saveDetectors();
   if(typeof renderHomeCards==='function') renderHomeCards();
 }
+
+// Fetch authoritative state from the FastAPI backend. On success, replaces
+// the in-memory `detectors` and refreshes the localStorage cache. On failure
+// (server down, offline), returns false and leaves `detectors` untouched so
+// the cached/default value keeps working.
+async function loadDetectorsFromBackend(){
+  try{
+    const res=await fetch('/api/calibrations');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(!Array.isArray(data)) throw new Error('expected an array');
+    detectors=data;
+    saveDetectors();
+    return true;
+  }catch(e){
+    console.warn('Backend unreachable, using cached detectors:',e);
+    return false;
+  }
+}
