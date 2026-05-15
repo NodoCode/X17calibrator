@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>X17 — Scintillateur Calibration</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h2 class="sr-only">X17 scintillateur calibration dashboard — home</h2>
+
+<div class="nav">
+  <a class="nav-logo" href="index.html">X17 <span>— Scintillateur Calibration</span></a>
+  <div class="nav-spacer"></div>
+  <span class="nav-clock" id="clk">--:--:--</span>
+  <a class="nav-btn primary" href="index.html"><i class="ti ti-home" aria-hidden="true"></i> Home</a>
+</div>
+
+<!-- HOME VIEW -->
+<div class="home-wrap">
+  <p class="home-title">Welcome</p>
+  <p class="home-sub">Here are the latest calibrations. To calibrate, press "New calibration".</p>
+
+  <!-- Populated by renderHomeCards() in app.js from the `detectors` array. -->
+  <div class="calib-list"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scintillator — X17</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h2 class="sr-only">X17 scintillateur calibration — detector detail</h2>
+
+<div class="nav">
+  <a class="nav-logo" href="index.html">X17 <span>— Scintillateur Calibration</span></a>
+  <div class="nav-spacer"></div>
+  <span class="nav-clock" id="clk">--:--:--</span>
+  <a class="nav-btn primary" href="index.html"><i class="ti ti-home" aria-hidden="true"></i> Home</a>
+</div>
+
+<div class="new-layout">
+
+  <!-- LEFT PANEL: data loading -->
+  <div class="left-panel">
+    <div style="font-size:12px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:14px">Load data</div>
+
+    <!-- Source accordions inserted here by renderSourceList() in app.js -->
+
+    <button class="add-src-btn" onclick="addSource()">
+      <i class="ti ti-plus" aria-hidden="true" style="font-size:15px"></i>
+      Add source
+    </button>
+
+    <div style="flex:1"></div>
+  </div>
+
+  <!-- RIGHT PANEL: result + histograms -->
+  <div class="right-panel">
+
+    <div class="result-card">
+      <div class="result-top">
+        <span class="result-label">Calibration —</span>
+        <span class="result-badge"><i class="ti ti-check" aria-hidden="true"></i> 0 sources</span>
+      </div>
+      <div class="result-eq">E(ADC) = …</div>
+      <div class="result-sub">Linear fit · NaI + Scintillator U/D · 95% CI</div>
+      <div class="result-metrics">
+        <div class="metric">
+          <div class="metric-label">R²</div>
+          <div class="metric-val green">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Residual RMS</div>
+          <div class="metric-val amber">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Points</div>
+          <div class="metric-val">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hist-section-label">Histograms</div>
+    <div class="hist-accordion">
+
+      <!-- Per-source rows in each .hist-body are populated by renderHistogramRows() -->
+      <div class="hist-item">
+        <div class="hist-hdr" onclick="toggleHist(this)">
+          <span class="hist-tag">RAW</span>
+          <span class="hist-htitle">Raw ADC spectra</span>
+          <i class="ti ti-chevron-down calib-chevron open" aria-hidden="true"></i>
+        </div>
+        <div class="hist-body open"></div>
+      </div>
+
+      <div class="hist-item">
+        <div class="hist-hdr" onclick="toggleHist(this)">
+          <span class="hist-tag">NaI</span>
+          <span class="hist-htitle">NaI + Gaussian fit</span>
+          <i class="ti ti-chevron-down calib-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="hist-body"></div>
+      </div>
+
+      <div class="hist-item">
+        <div class="hist-hdr" onclick="toggleHist(this)">
+          <span class="hist-tag">U/D</span>
+          <span class="hist-htitle">Scatter U/D + erfc fit</span>
+          <i class="ti ti-chevron-down calib-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="hist-body"></div>
+      </div>
+
+      <div class="hist-item" style="border-color:var(--color-border-primary)">
+        <div class="hist-hdr" onclick="toggleHist(this)">
+          <span class="hist-tag" style="border-color:var(--color-border-primary);color:var(--color-text-primary)">FIT</span>
+          <span class="hist-htitle">Linear regression — E(ADC)</span>
+          <i class="ti ti-chevron-down calib-chevron" aria-hidden="true"></i>
+        </div>
+        <div class="hist-body">
+          <canvas id="c-reg" width="600" height="180" style="width:100%"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

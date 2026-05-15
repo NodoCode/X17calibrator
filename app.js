@@ -52,52 +52,10 @@ function addSource(){
     alert('All 4 isotopes are already in use — cannot add another source.');
     return;
   }
-  srcUid++;
   const idx=document.querySelectorAll('.src-accordion').length+1;
-  const radioName='iso'+srcUid;
-  // Build the radio grid with `iso` pre-selected; other isotopes claimed
-  // elsewhere will be greyed out by refreshIsotopeAvailability() below.
-  const isoOpts=ISOTOPES.map(i=>{
-    const sel=i===iso?' selected':'';
-    const chk=i===iso?' checked':'';
-    return `<label class="iso-opt${sel}"><input type="radio" name="${radioName}"${chk} /> ${i}</label>`;
-  }).join('\n              ');
-  const html=`
-      <div class="src-accordion">
-        <div class="src-header" onclick="toggleSrc(this)">
-          <div class="src-num">${idx}</div>
-          <span class="src-label">Source ${idx}</span>
-          <span class="src-iso-badge">${iso}</span>
-          <i class="ti ti-chevron-down calib-chevron open" aria-hidden="true"></i>
-        </div>
-        <div class="src-body">
-          <div class="field-row">
-            <div class="field-label">Name</div>
-            <input type="text" class="field-input" value="Source ${idx}" />
-          </div>
-          <div class="field-row">
-            <div class="field-label">Isotope</div>
-            <div class="iso-grid">
-              ${isoOpts}
-            </div>
-          </div>
-          <div class="field-row">
-            <div class="field-label">Upload CSV</div>
-            <div class="upload-det">NaI</div>
-            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
-            <div class="upload-det" style="margin-top:8px">Up (U)</div>
-            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
-            <div class="upload-det" style="margin-top:6px">Down (D)</div>
-            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
-          </div>
-          <button class="delete-src-btn" onclick="deleteSrc(this)">
-            <i class="ti ti-trash" aria-hidden="true"></i>
-            Delete source
-          </button>
-        </div>
-      </div>`;
-  addBtn.insertAdjacentHTML('beforebegin', html);
+  addBtn.insertAdjacentHTML('beforebegin', srcAccordionHTML(iso, idx, true));
   refreshSources();
+  syncDetectorFromDOM();
 }
 
 // ─── Cross-source isotope exclusion ───────────────────────────
@@ -118,8 +76,8 @@ function refreshIsotopeAvailability(){
   });
 }
 
-// When a radio changes, update the local .selected class, the badge in the
-// accordion header, then refresh cross-source availability. Delegated once.
+// When a radio changes, update the local .selected class, the source label
+// in the accordion header, then refresh cross-source availability. Delegated once.
 document.addEventListener('change',(e)=>{
   const input=e.target;
   if(!(input instanceof HTMLInputElement)) return;
@@ -131,10 +89,11 @@ document.addEventListener('change',(e)=>{
   label.classList.add('selected');
   const acc=label.closest('.src-accordion');
   if(acc){
-    const badge=acc.querySelector('.src-iso-badge');
-    if(badge) badge.textContent=isoOptIsotope(label);
+    const srcLabel=acc.querySelector('.src-label');
+    if(srcLabel) srcLabel.textContent=isoOptIsotope(label);
   }
   refreshIsotopeAvailability();
+  syncDetectorFromDOM();
 });
 
 // ─── Delete source (2-click confirm) ──────────────────────────
@@ -145,7 +104,7 @@ function deleteSrc(btn){
   if(btn.classList.contains('armed')){
     if(btn._disarmTimer){clearTimeout(btn._disarmTimer);btn._disarmTimer=null;}
     const acc=btn.closest('.src-accordion');
-    if(acc){acc.remove();refreshSources();}
+    if(acc){acc.remove();refreshSources();syncDetectorFromDOM();}
     return;
   }
   btn.classList.add('armed');
@@ -159,25 +118,29 @@ function deleteSrc(btn){
 }
 
 // ─── Source bookkeeping ───────────────────────────────────────
-// Renumber visible source labels in DOM order, then refresh the
-// "N source(s)" badge in the top-right of the right panel.
+// Renumber the position badge of each source in DOM order, then refresh
+// the "N source(s)" indicator in the top-right of the right panel.
+// The source name itself is the isotope and is managed by the radio handler.
 function refreshSources(){
   const accs=document.querySelectorAll('.src-accordion');
   accs.forEach((acc,i)=>{
-    const num=i+1;
     const numEl=acc.querySelector('.src-num');
-    const labelEl=acc.querySelector('.src-label');
-    if(numEl) numEl.textContent=num;
-    if(labelEl) labelEl.textContent='Source '+num;
-    // Only rename the input if it's still a default-looking "Source N";
-    // never clobber a value the user has edited.
-    const nameInput=acc.querySelector('input.field-input');
-    if(nameInput && /^Source \d+$/.test(nameInput.value)){
-      nameInput.value='Source '+num;
-    }
+    if(numEl) numEl.textContent=i+1;
+    refreshSourceStatus(acc);
   });
   updateSourceBadge(accs.length);
   refreshIsotopeAvailability();
+}
+
+// Show "No data uploaded" while any upload-zone in the source is empty,
+// and hide it once all (NaI + U + D) are filled. Called per-accordion.
+function refreshSourceStatus(acc){
+  const status=acc.querySelector('.src-status');
+  if(!status) return;
+  const zones=acc.querySelectorAll('.upload-zone');
+  const filled=acc.querySelectorAll('.upload-zone.filled').length;
+  const complete=zones.length>0 && filled===zones.length;
+  status.style.display=complete?'none':'';
 }
 
 function updateSourceBadge(n){
@@ -324,18 +287,263 @@ function drawRegression(id){
   ctx.fillStyle='#88878099'; ctx.fillText('²²⁸Th',W-80,39);
 }
 
+// ─── Home page: detector calibrations (data-driven) ──────────
+// Single source of truth for the 16 cards on main.html. Persisted to
+// localStorage so user edits survive reloads. Will be replaced by a
+// fetch('/api/calibrations') once the Flask backend is wired up.
+
+// Bumped after shape change: sources became an array of objects, fit became
+// a nested object, detailHref dropped (always detector.html?id=N now).
+const STORAGE_KEY='x17-detectors-v2';
+
+const DEFAULT_DETECTORS=[
+  {id:0,  status:'ok',  fit:{a:4.42,sigA:0.36,b:4,sigB:3,r2:0.9987,rms:1.8,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'²²⁸Th'}]},
+  {id:1,  status:'ok',  fit:{a:4.38,sigA:0.29,b:5,sigB:2,r2:0.9985,rms:1.9,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'⁶⁰Co'}]},
+  {id:2,  status:'ok',  fit:{a:4.51,sigA:0.41,b:3,sigB:3,r2:0.9978,rms:2.0,points:4}, sources:[{isotope:'²²⁸Th'},{isotope:'⁶⁰Co'}]},
+  {id:3,  status:'ok',  fit:{a:4.19,sigA:0.45,b:7,sigB:4,r2:0.9971,rms:2.3,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'²⁰⁴Bi'}]},
+  {id:4,  status:'ok',  fit:{a:4.11,sigA:0.42,b:6,sigB:4,r2:0.9971,rms:2.3,points:4}, sources:[{isotope:'⁶⁰Co'},{isotope:'¹³⁷Cs'}]},
+  {id:5,  status:'ok',  fit:{a:4.27,sigA:0.33,b:5,sigB:3,r2:0.9983,rms:1.9,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'²²⁸Th'}]},
+  {id:6,  status:'ok',  fit:{a:4.48,sigA:0.31,b:4,sigB:2,r2:0.9988,rms:1.7,points:4}, sources:[{isotope:'⁶⁰Co'},{isotope:'²²⁸Th'}]},
+  {id:7,  status:'ok',  fit:{a:4.05,sigA:0.50,b:8,sigB:5,r2:0.9962,rms:2.5,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'²⁰⁴Bi'}]},
+  {id:8,  status:'ok',  fit:{a:4.33,sigA:0.28,b:3,sigB:2,r2:0.9990,rms:1.6,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'⁶⁰Co'}]},
+  {id:9,  status:'ok',  fit:{a:4.21,sigA:0.39,b:6,sigB:3,r2:0.9980,rms:2.0,points:4}, sources:[{isotope:'²²⁸Th'},{isotope:'²⁰⁴Bi'}]},
+  {id:10, status:'old', fit:{a:4.46,sigA:0.35,b:4,sigB:3,r2:0.9982,rms:1.9,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'²²⁸Th'}]},
+  {id:11, status:'old', fit:{a:4.16,sigA:0.44,b:7,sigB:4,r2:0.9969,rms:2.4,points:4}, sources:[{isotope:'⁶⁰Co'},{isotope:'¹³⁷Cs'}]},
+  {id:12, status:'old', fit:{a:4.29,sigA:0.37,b:5,sigB:3,r2:0.9979,rms:2.1,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'²²⁸Th'}]},
+  {id:13, status:'old', fit:{a:4.40,sigA:0.32,b:4,sigB:2,r2:0.9987,rms:1.7,points:4}, sources:[{isotope:'⁶⁰Co'},{isotope:'²⁰⁴Bi'}]},
+  {id:14, status:'old', fit:{a:4.08,sigA:0.48,b:8,sigB:5,r2:0.9964,rms:2.5,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'²²⁸Th'}]},
+  {id:15, status:'old', fit:{a:4.24,sigA:0.40,b:6,sigB:3,r2:0.9976,rms:2.2,points:4}, sources:[{isotope:'¹³⁷Cs'},{isotope:'⁶⁰Co'},{isotope:'²²⁸Th'}]},
+];
+
+// Mutable state. Initialized from localStorage if present, otherwise from defaults.
+let detectors=loadDetectors();
+
+function loadDetectors(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){
+    console.warn('Could not read detectors from localStorage:',e);
+  }
+  return structuredClone(DEFAULT_DETECTORS);
+}
+
+function saveDetectors(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(detectors));
+  }catch(e){
+    console.warn('Could not save detectors to localStorage:',e);
+  }
+}
+
+// Public mutation API — call from anywhere (calibration page, console, future
+// backend wiring). After mutating, persists and re-renders the home grid
+// if it's currently visible.
+function setDetector(id,patch){
+  const d=detectors.find(d=>d.id===id);
+  if(!d) return false;
+  Object.assign(d,patch);
+  saveDetectors();
+  renderHomeCards();
+  return true;
+}
+
+// Reset to factory defaults — useful while iterating on the mockup.
+// Call from the browser console: resetDetectors()
+function resetDetectors(){
+  detectors=structuredClone(DEFAULT_DETECTORS);
+  saveDetectors();
+  renderHomeCards();
+}
+
+function renderCard(d){
+  const num=String(d.id).padStart(2,'0');
+  const dotStyle=d.status==='old'?' style="background:#888780"':'';
+  const isotopes=d.sources.map(s=>s.isotope).join(' · ');
+  const eq=d.fit
+    ? `E(ADC) = (${d.fit.a}±${d.fit.sigA})·ADC + (${d.fit.b}±${d.fit.sigB})`
+    : 'Uncalibrated';
+  return `
+    <div class="calib-card">
+      <div class="calib-header" onclick="toggleCalib(this)">
+        <div class="calib-dot"${dotStyle}></div>
+        <span class="calib-name">Scintillator ${num}</span>
+        <span class="calib-eq">${eq}</span>
+        <i class="ti ti-chevron-down calib-chevron" aria-hidden="true"></i>
+      </div>
+      <div class="calib-body">
+        <div class="calib-body-inner">
+          <a class="see-btn" href="detector.html?id=${d.id}"><i class="ti ti-chart-histogram" aria-hidden="true"></i> See histograms</a>
+          <span class="calib-meta">${isotopes}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderHomeCards(){
+  const list=document.querySelector('.calib-list');
+  if(!list) return;  // not on home page → no-op
+  list.innerHTML=detectors.map(renderCard).join('');
+}
+
+// ─── Detail page (detector.html?id=N) ─────────────────────────
+// Reads `?id=N` from the URL, finds that detector, and populates the
+// page from `detectors[id]`. All edits (add/delete/change isotope)
+// mutate that detector and persist via saveDetectors().
+
+// Set on detail-page entry. Read by syncDetectorFromDOM() so that
+// add/delete/change handlers know which detector to update.
+let currentDetectorId=null;
+
+const SOURCE_COLORS=['#185FA5','#854F0B','#4A7B3C','#7C3C5E'];
+
+function renderDetail(){
+  const layout=document.querySelector('.new-layout');
+  if(!layout) return;  // not on detail page
+  const params=new URLSearchParams(location.search);
+  const id=parseInt(params.get('id'),10);
+  const detector=detectors.find(d=>d.id===id);
+  if(!detector){
+    // Unknown id → bounce back to home
+    location.replace('main.html');
+    return;
+  }
+  currentDetectorId=id;
+  renderResultCard(detector);
+  renderSourceList(detector);
+  renderHistogramRows(detector);
+  refreshSources();
+  drawDetailCharts(detector);
+}
+
+function renderResultCard(d){
+  const num=String(d.id).padStart(2,'0');
+  const setText=(sel,txt)=>{const el=document.querySelector(sel); if(el) el.textContent=txt;};
+  setText('.result-label','Calibration — Scintillator '+num);
+  if(d.fit){
+    setText('.result-eq',`E(ADC) = (${d.fit.a} ± ${d.fit.sigA})·ADC + (${d.fit.b} ± ${d.fit.sigB})`);
+    const vals=document.querySelectorAll('.metric-val');
+    if(vals[0]) vals[0].textContent=d.fit.r2;
+    if(vals[1]) vals[1].textContent=d.fit.rms+' keV';
+    if(vals[2]) vals[2].textContent=d.fit.points;
+  }
+  updateSourceBadge(d.sources.length);
+}
+
+function renderSourceList(d){
+  const addBtn=document.querySelector('.add-src-btn');
+  if(!addBtn) return;
+  // Drop any existing source accordions, then re-insert from data.
+  document.querySelectorAll('.src-accordion').forEach(el=>el.remove());
+  d.sources.forEach((src,i)=>{
+    addBtn.insertAdjacentHTML('beforebegin', srcAccordionHTML(src.isotope, i+1, i===0));
+  });
+}
+
+// Build a source accordion HTML block. `open` controls the body state
+// (only the first source is open by default to keep the panel compact).
+function srcAccordionHTML(iso, idx, open){
+  srcUid++;
+  const radioName='iso'+srcUid;
+  const isoOpts=ISOTOPES.map(i=>{
+    const sel=i===iso?' selected':'';
+    const chk=i===iso?' checked':'';
+    return `<label class="iso-opt${sel}"><input type="radio" name="${radioName}"${chk} /> ${i}</label>`;
+  }).join('\n              ');
+  const bodyCls=open?'src-body':'src-body closed';
+  const chevCls=open?'calib-chevron open':'calib-chevron';
+  return `
+      <div class="src-accordion">
+        <div class="src-header" onclick="toggleSrc(this)">
+          <div class="src-num">${idx}</div>
+          <span class="src-label">${iso}</span>
+          <span class="src-status">No data uploaded</span>
+          <i class="ti ti-chevron-down ${chevCls}" aria-hidden="true"></i>
+        </div>
+        <div class="${bodyCls}">
+          <div class="field-row">
+            <div class="field-label">Isotope</div>
+            <div class="iso-grid">
+              ${isoOpts}
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Upload CSV</div>
+            <div class="upload-det">NaI</div>
+            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
+            <div class="upload-det" style="margin-top:8px">Up (U)</div>
+            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
+            <div class="upload-det" style="margin-top:6px">Down (D)</div>
+            <div class="upload-zone"><i class="ti ti-upload" aria-hidden="true" style="font-size:14px;margin-bottom:2px"></i><div>Drag here or import</div></div>
+          </div>
+          <button class="delete-src-btn" onclick="deleteSrc(this)">
+            <i class="ti ti-trash" aria-hidden="true"></i>
+            Delete source
+          </button>
+        </div>
+      </div>`;
+}
+
+// Regenerate the per-source chart rows inside each histogram section,
+// using canvas IDs that match the drawDetailCharts() loop.
+function renderHistogramRows(d){
+  const sections=[
+    {bodySel:'.hist-item:nth-child(1) .hist-body', prefix:'c-raw'},
+    {bodySel:'.hist-item:nth-child(2) .hist-body', prefix:'c-nai'},
+    {bodySel:'.hist-item:nth-child(3) .hist-body', prefix:'c-ud'},
+  ];
+  sections.forEach(({bodySel,prefix})=>{
+    const body=document.querySelector(bodySel);
+    if(!body) return;
+    body.innerHTML=d.sources.map((s,i)=>`
+          <div class="chart-src-row">
+            <span class="chart-src-label">${s.isotope}</span>
+            <canvas id="${prefix}-${i+1}" width="420" height="100"></canvas>
+          </div>`).join('');
+  });
+}
+
+function drawDetailCharts(d){
+  setTimeout(()=>{
+    d.sources.forEach((s,i)=>{
+      const color=SOURCE_COLORS[i%SOURCE_COLORS.length];
+      drawHist(`c-raw-${i+1}`,[[0.35+i*0.05,65+i*5,18],[0.55+i*0.04,40+i*3,16]],color);
+      drawNaI(`c-nai-${i+1}`,[[0.35+i*0.06,70-i*5,18]],color);
+      drawScatter(`c-ud-${i+1}`,0.35+i*0.08,color);
+    });
+    drawRegression('c-reg');
+  },50);
+}
+
+// ─── Persistence: keep detectors[] in sync with the DOM ──────
+// Called after any mutation on the detail page (add / delete / iso change).
+// Reads the current state of the source list, writes it to detectors[id], persists.
+function syncDetectorFromDOM(){
+  if(currentDetectorId===null) return;
+  const d=detectors.find(x=>x.id===currentDetectorId);
+  if(!d) return;
+  d.sources=[...document.querySelectorAll('.src-accordion')].map(acc=>{
+    const sel=acc.querySelector('.iso-opt.selected');
+    return {isotope:isoOptIsotope(sel)};
+  });
+  saveDetectors();
+  // Result-card badge tracks source count.
+  updateSourceBadge(d.sources.length);
+}
+
 // ─── Init ─────────────────────────────────────────────────────
+// Single entry point. Branches based on which page we're on:
+// - main.html (`.calib-list` present) → renderHomeCards()
+// - detector.html (`.new-layout` present + ?id=) → renderDetail()
 document.addEventListener('DOMContentLoaded',()=>{
   tick(); setInterval(tick,1000);
-  refreshSources();
+  renderHomeCards();
+  renderDetail();
+});
 
-  setTimeout(()=>{
-    drawHist('c-raw-1',[[0.35,70,18],[0.36,70,18]],'#185FA5');
-    drawHist('c-raw-2',[[0.4,55,22],[0.72,45,16]],'#854F0B');
-    drawNaI('c-nai-1',[[0.35,72,18]],'#185FA5');
-    drawNaI('c-nai-2',[[0.41,58,20],[0.72,44,15]],'#854F0B');
-    drawScatter('c-ud-1',0.35,'#185FA5');
-    drawScatter('c-ud-2',0.56,'#854F0B');
-    drawRegression('c-reg');
-  },200);
+// Refresh the home grid when the user navigates back from a detail page
+// (browser back / logo click). Picks up source edits made there.
+window.addEventListener('pageshow',()=>{
+  detectors=loadDetectors();
+  renderHomeCards();
 });
